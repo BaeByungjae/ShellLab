@@ -4,8 +4,8 @@
  *
  * tsh - A tiny shell program with job control
  *
- * Name: <fill in>
- * Student id: <fill in>
+ * Name: Suhyun Lee
+ * Student id: 2013-11419
  *
  */
 #include <stdio.h>
@@ -175,6 +175,15 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline)
 {
+	char argv[MAXARGS];
+	
+	if (!strcmp(cmdline, "quit\n")) {
+		exit(0);
+	} else if (!strcmp(cmdline, "jobs\n")) {
+	} else if (!strcmp(cmdline, "bg\n")) {
+	} else if (!strcmp(cmdline, "fg\n")) {
+	} else {
+	}
   return;
 }
 
