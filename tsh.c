@@ -175,16 +175,25 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline)
 {
-	char argv[MAXARGS];
+	char* argv[MAXARGS];
+	int isBg;
+	pid_t pid;
 	
-	if (!strcmp(cmdline, "quit\n")) {
-		exit(0);
-	} else if (!strcmp(cmdline, "jobs\n")) {
-	} else if (!strcmp(cmdline, "bg\n")) {
-	} else if (!strcmp(cmdline, "fg\n")) {
-	} else {
+	isBg = parseline(cmdline, argv);
+	if (!builtin_cmd(argv)) {
+		if ((pid = fork()) == 0) {	/* child */
+			
+			execve(argv[0], argv, NULL);
+			setpgid(0, 0);
+		} else {	/* parent */
+			if (isBg) {
+				addjob(jobs, pid, BG, cmdline);
+			} else {
+				addjob(jobs, pid, FG, cmdline);
+				waitfg(pid);
+			}
+		}
 	}
-  return;
 }
 
 /*
@@ -250,7 +259,17 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv)
 {
-  return 0;     /* not a builtin command */
+	if (!strcmp(argv[0], "quit")) {
+		exit(0);
+	} else if (!strcmp(argv[0], "jobs")) {
+		listjobs(jobs);
+		return 1;
+	} else if (!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
+		do_bgfg(argv);
+		return 1;
+  } else {
+	  return 0;     /* not a builtin command */
+	}
 }
 
 /*
@@ -258,7 +277,10 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv)
 {
-  return;
+	if (!strcmp(argv[0], "bg")) {
+		
+	} else if (strcmp(argv[0], "fg")) {
+	}
 }
 
 /*
@@ -266,7 +288,9 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-  return;
+	if (waitpid(pid, NULL, 0) != pid) {
+		printf("waitfg failed\n"); /* FIXME */
+	}
 }
 
 /*****************
@@ -282,17 +306,27 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig)
 {
+	waitpid(0, NULL, WUNTRACED);
   return;
 }
 
 /*
- * sigint_handler - The kernel sends a SIGINT to the shell whenver the
+ * sigint_handler - The kernel sends a SIGINT to the shell whenever the
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.
  */
 void sigint_handler(int sig)
 {
-  return;
+	pid_t pid;
+	struct job_t *job;
+
+	/* get the pid of current foreground job */
+	pid = fgpid(jobs);
+	if (pid != 0) {	/* if there exist a foreground job */
+		job = getjobpid(jobs, pid);
+		clearjob(job);	/* remove the job from the list */
+		printf("Job (%d) terminated by signal %d\n", pid, sig);
+	}
 }
 
 /*
@@ -302,7 +336,15 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig)
 {
-  return;
+	pid_t pid;
+	struct job_t *job;
+
+	/* get the pid of current foreground job */
+	pid = fgpid(jobs);
+	if (pid != 0) {	/* if there exist a foreground job */
+		job = getjobpid(jobs, pid);
+		job->state = ST; /* change the job state from FG to ST */
+	}
 }
 
 /*********************
