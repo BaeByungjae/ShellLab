@@ -182,9 +182,8 @@ void eval(char *cmdline)
 	isBg = parseline(cmdline, argv);
 	if (!builtin_cmd(argv)) {
 		if ((pid = fork()) == 0) {	/* child */
-			
-			execve(argv[0], argv, NULL);
 			setpgid(0, 0);
+			execve(argv[0], argv, NULL);
 		} else {	/* parent */
 			if (isBg) {
 				addjob(jobs, pid, BG, cmdline);
@@ -288,8 +287,13 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-	if (waitpid(pid, NULL, 0) != pid) {
-		printf("waitfg failed\n"); /* FIXME */
+	struct job_t *job;
+	while(1) {
+		job = getjobpid(jobs, pid);
+		if (job == NULL || (job != NULL && job->state == ST)) {
+			break;
+		}
+		sleep(1);
 	}
 }
 
@@ -306,8 +310,14 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig)
 {
-	waitpid(0, NULL, WUNTRACED);
-  return;
+	pid_t pid;
+	struct job_t *job;
+	while((pid = waitpid(0, NULL, WNOHANG)) != -1) { /* FIXME */
+		job = getjobpid(jobs, pid);
+		if (job != NULL && job->state == BG) {
+			clearjob(job);
+		}
+	}
 }
 
 /*
@@ -319,13 +329,18 @@ void sigint_handler(int sig)
 {
 	pid_t pid;
 	struct job_t *job;
-
+	
 	/* get the pid of current foreground job */
 	pid = fgpid(jobs);
 	if (pid != 0) {	/* if there exist a foreground job */
 		job = getjobpid(jobs, pid);
-		clearjob(job);	/* remove the job from the list */
-		printf("Job (%d) terminated by signal %d\n", pid, sig);
+		if (job != NULL) {
+			clearjob(job);	/* remove the job from the list */
+			printf("Job (%d) terminated by signal %d\n", pid, sig);
+		} else {
+			printf("Error has occured while terminating the foreground job.\n");
+			exit(1);
+		}
 	}
 }
 
@@ -344,6 +359,7 @@ void sigtstp_handler(int sig)
 	if (pid != 0) {	/* if there exist a foreground job */
 		job = getjobpid(jobs, pid);
 		job->state = ST; /* change the job state from FG to ST */
+		printf("Job [%d] (%d) stopped by signal %d\n", job->jid, job->pid, sig);
 	}
 }
 
