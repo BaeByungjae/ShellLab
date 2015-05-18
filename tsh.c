@@ -178,6 +178,7 @@ void eval(char *cmdline)
 	char* argv[MAXARGS];
 	int isBg;
 	pid_t pid;
+	struct job_t *job;
 	
 	isBg = parseline(cmdline, argv);
 	if (!builtin_cmd(argv)) {
@@ -190,6 +191,8 @@ void eval(char *cmdline)
 		} else {	/* parent */
 			if (isBg) {
 				addjob(jobs, pid, BG, cmdline);
+				job = getjobpid(jobs, pid);
+				printf("[%d] (%d) %s", job->jid, pid, cmdline);
 			} else {
 				addjob(jobs, pid, FG, cmdline);
 				waitfg(pid);
@@ -322,12 +325,13 @@ void sigchld_handler(int sig)
 		if (job != NULL) {
 			if (WIFSTOPPED(status)) {
 				job->state = ST;
+				printf("Job [%d] (%d) stopped by signal 20\n", job->jid, job->pid);
+			} else if (WIFSIGNALED(status)) {
+				clearjob(job);
+				printf("Job (%d) terminated by signal 2\n", pid);
 			} else {
 				clearjob(job);
 			}
-			/*if (job->state == BG || job->state == FG) {
-				clearjob(job);
-			}*/
 		}
 	}
 }
@@ -344,7 +348,6 @@ void sigint_handler(int sig)
 	/* get the pid of current foreground job */
 	pid = fgpid(jobs);
 	if (pid != 0) {	/* if there exist a foreground job */
-		printf("Job (%d) terminated by signal %d\n", pid, sig);
 		kill(pid, sig);
 	}
 }
@@ -357,13 +360,10 @@ void sigint_handler(int sig)
 void sigtstp_handler(int sig)
 {
 	pid_t pid;
-	struct job_t *job;
 
 	/* get the pid of current foreground job */
 	pid = fgpid(jobs);
 	if (pid != 0) {	/* if there exist a foreground job */
-		job = getjobpid(jobs, pid);
-		printf("Job [%d] (%d) stopped by signal %d\n", job->jid, job->pid, sig);
 		kill(pid, sig);
 	}
 }
