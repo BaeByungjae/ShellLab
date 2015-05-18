@@ -18,6 +18,8 @@
 #include <sys/wait.h>
 #include <errno.h>
 
+#include <sys/stat.h>
+
 /* Misc manifest constants */
 #define MAXLINE    1024   /* max line size */
 #define MAXARGS     128   /* max args on a command line */
@@ -179,16 +181,21 @@ void eval(char *cmdline)
 	int isBg;
 	pid_t pid;
 	struct job_t *job;
+	struct stat st;
 	
 	isBg = parseline(cmdline, argv);
 	if (!builtin_cmd(argv)) {
 		if ((pid = fork()) == 0) {	/* child */
 			setpgid(0, 0);
 			if (execve(argv[0], argv, NULL) == -1) {
-				printf("%s: Command not found.\n", argv[0]);
+				//printf("%s: Command not found.\n", argv[0]);
 				exit(0);
 			}
 		} else {	/* parent */
+			if (stat(argv[0], &st) != 0) {
+				printf("%s: Command not found.\n", argv[0]);
+				return;
+			}
 			if (isBg) {
 				addjob(jobs, pid, BG, cmdline);
 				job = getjobpid(jobs, pid);
