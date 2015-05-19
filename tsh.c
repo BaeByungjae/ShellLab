@@ -301,6 +301,8 @@ void waitfg(pid_t pid)
 		}
 		sleep(1);
 	}
+	if (verbose)
+		printf("waitfg: Process (%d) no longer the fg process\n", pid);
 }
 
 /*****************
@@ -323,18 +325,27 @@ void sigchld_handler(int sig)
 	if (verbose)
 		printf("sigchld_handler: entering\n");
 
-	while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) { /* FIXME */
+	while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
 		job = getjobpid(jobs, pid);
 		if (job != NULL) {
+
 			if (WIFSTOPPED(status)) {
 				job->state = ST;
 				printf("Job [%d] (%d) stopped by signal 20\n", job->jid, job->pid);
 			} else if (WIFSIGNALED(status)) {
+				if (verbose) {
+					printf("sigchld_handler: Job [%d] (%d) deleted\n", job->jid, job->pid);
+				}
 				deletejob(jobs, pid);
 				printf("Job (%d) terminated by signal 2\n", pid);
 			} else {
+				if (verbose) {
+					printf("sigchld_handler: Job [%d] (%d) deleted\n", job->jid, job->pid);
+					if (status == 0) {
+						printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", job->jid, job->pid, status);
+					}
+				}
 				deletejob(jobs, pid);
-				if (verbose)
 			}
 		}
 	}
@@ -352,11 +363,17 @@ void sigint_handler(int sig)
 {
 	pid_t pid;
 	
+	if (verbose)
+		printf("sigint_handler: entering\n");
 	/* get the pid of current foreground job */
 	pid = fgpid(jobs);
 	if (pid != 0) {	/* if there exist a foreground job */
 		kill(pid, sig);
+		if (verbose)
+			printf("sigint_handler: Job (%d) killed\n", pid);
 	}
+	if (verbose)
+		printf("sigint_handler: exiting\n");
 }
 
 /*
@@ -367,12 +384,21 @@ void sigint_handler(int sig)
 void sigtstp_handler(int sig)
 {
 	pid_t pid;
-
+	struct job_t *job;
+	
+	if (verbose)
+		printf("sigtstp_handler: entering\n");
 	/* get the pid of current foreground job */
 	pid = fgpid(jobs);
 	if (pid != 0) {	/* if there exist a foreground job */
 		kill(pid, sig);
+		if (verbose) {
+			job = getjobpid(jobs, pid);
+			printf("sigtstp_handler: Job [%d] (%d) stopped\n", job->jid, pid);
+		}
 	}
+	if (verbose)
+		printf("sigtstp_handler: exiting\n");
 }
 
 /*********************
