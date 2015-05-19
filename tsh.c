@@ -18,8 +18,6 @@
 #include <sys/wait.h>
 #include <errno.h>
 
-#include <sys/stat.h>
-
 /* Misc manifest constants */
 #define MAXLINE    1024   /* max line size */
 #define MAXARGS     128   /* max args on a command line */
@@ -181,21 +179,16 @@ void eval(char *cmdline)
 	int isBg;
 	pid_t pid;
 	struct job_t *job;
-	struct stat st;
 	
 	isBg = parseline(cmdline, argv);
 	if (!builtin_cmd(argv)) {
 		if ((pid = fork()) == 0) {	/* child */
 			setpgid(0, 0);
 			if (execve(argv[0], argv, NULL) == -1) {
-				//printf("%s: Command not found.\n", argv[0]);
+				printf("%s: Command not found.\n", argv[0]);
 				exit(0);
 			}
 		} else {	/* parent */
-			if (stat(argv[0], &st) != 0) {
-				printf("%s: Command not found.\n", argv[0]);
-				return;
-			}
 			if (isBg) {
 				addjob(jobs, pid, BG, cmdline);
 				job = getjobpid(jobs, pid);
@@ -326,6 +319,9 @@ void sigchld_handler(int sig)
 	pid_t pid;
 	struct job_t *job;
 	int status;
+	
+	if (verbose)
+		printf("sigchld_handler: entering\n");
 
 	while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) { /* FIXME */
 		job = getjobpid(jobs, pid);
@@ -334,13 +330,17 @@ void sigchld_handler(int sig)
 				job->state = ST;
 				printf("Job [%d] (%d) stopped by signal 20\n", job->jid, job->pid);
 			} else if (WIFSIGNALED(status)) {
-				clearjob(job);
+				deletejob(jobs, pid);
 				printf("Job (%d) terminated by signal 2\n", pid);
 			} else {
-				clearjob(job);
+				deletejob(jobs, pid);
+				if (verbose)
 			}
 		}
 	}
+	
+	if (verbose)
+		printf("sigchld_handler: exiting\n");
 }
 
 /*
