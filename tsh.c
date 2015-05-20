@@ -185,7 +185,7 @@ void eval(char *cmdline)
 		if ((pid = fork()) == 0) {	/* child */
 			setpgid(0, 0);
 			if (execve(argv[0], argv, NULL) == -1) {
-				printf("%s: Command not found.\n", argv[0]);
+				printf("%s: Command not found\n", argv[0]);
 				exit(0);
 			}
 		} else {	/* parent */
@@ -282,9 +282,24 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv)
 {
-	if (!strcmp(argv[0], "bg")) {
-		
-	} else if (strcmp(argv[0], "fg")) {
+	struct job_t *job;
+
+	if (argv[1][0] == '%') {
+		job = getjobjid(jobs, atoi(&argv[1][1]));
+	} else {
+		job = getjobpid(jobs, atoi(argv[1]));
+	}
+	if (job == NULL) {
+		printf("%s: No such job\n", argv[1]);
+	} else {
+		kill(job->pid, SIGCONT);
+		if (!strcmp(argv[0], "fg")) { /* foreground task */
+			job->state = FG;
+			waitfg(job->pid);
+		} else {
+			job->state = BG;
+			printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
+		}
 	}
 }
 
@@ -336,8 +351,8 @@ void sigchld_handler(int sig)
 				if (verbose) {
 					printf("sigchld_handler: Job [%d] (%d) deleted\n", job->jid, job->pid);
 				}
+				printf("Job [%d] (%d) terminated by signal 2\n", job-> jid, job->pid);
 				deletejob(jobs, pid);
-				printf("Job (%d) terminated by signal 2\n", pid);
 			} else {
 				if (verbose) {
 					printf("sigchld_handler: Job [%d] (%d) deleted\n", job->jid, job->pid);
